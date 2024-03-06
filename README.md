@@ -8,3 +8,4 @@
 
 **Kế hoạch tuần:** https://docs.google.com/spreadsheets/d/1kT_yhKGLtJLOF3uFgAWleVLWWvb324zPkenMr5RdX1Y/edit?usp=sharing
 
+Slide: https://docs.google.com/presentation/d/1xOhxETvj5R2X-V7OZ0QdT65p5zBdfNge0pFsGzmVdcU/edit#slide=id.g2bd728b720e_2_36 
