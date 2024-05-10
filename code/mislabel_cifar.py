@@ -6,20 +6,21 @@ import numpy as np
 import copy
 import warnings
 
-class MISLABELCIFAR10(torchvision.datastet.CIFAR10):
-    def __inint__(self,root, mislabel_type ='agnostic', mislabel_ratio = 0.5, rand_number = 0, train = True, 
+class MISLABELCIFAR10(torchvision.datasets.CIFAR10):
+
+    def __init__(self, root, mislabel_type ='agnostic', mislabel_ratio = 0.5, rand_number = 0, train = True, 
                   transform = None, target_transform = None, download = False):
         super(MISLABELCIFAR10,self).__init__(root, train, transform,target_transform,download)
         np.random.seed(rand_number)
         self.gen_mislabeled_data(mislabel_type = mislabel_type, mislabel_ratio = mislabel_ratio)
 
-    def gen_mislabeled_data(self, mislabel_type, mislabeled_ratio): # Để tạo dữ liệu thành nhiễu với tỷ lệ nhiễu cho trước
+    def gen_mislabeled_data(self, mislabel_type, mislabel_ratio): # Để tạo dữ liệu thành nhiễu với tỷ lệ nhiễu cho trước
         new_targets = []
         num_cls = np.max(self.targets) + 1 # Số lượng lớp cần phân loại, đối với CIFAR10 là 10
 
         if mislabel_type == 'agnostic':# Nhãn nhiễu được tạo một cách ngẫu nhiên không biết trước
             for _, target in enumerate(self.targets): 
-                if np.random.rand() < mislabeled_ratio:
+                if np.random.rand() < mislabel_ratio:
                     new_target = target
                     while new_target == target:
                         new_target = np.random.randint(num_cls)
@@ -37,7 +38,7 @@ class MISLABELCIFAR10(torchvision.datastet.CIFAR10):
                     break
 
             for _, target in enumerate(self.targets):
-                if np.random.rand() < mislabeled_ratio:
+                if np.random.rand() < mislabel_ratio:
                     new_target = permu_list[target]
                     new_targets.append(new_target)
                 else:
@@ -119,13 +120,13 @@ class MISLABELCIFAR10(torchvision.datastet.CIFAR10):
         train_data = torch.cat(imgs, dim = 0)
         return train_data
     
-    def __get_item__(self,index): # Lấy dữ liệu từ một index cho trước, cái hàm này hình như không dùng
+    def __getitem__(self,index): # Lấy dữ liệu từ một index cho trước, cái hàm này hình như không dùng
         img, target, real_target = self.data[index], self.targets[index], self.real_targets[index]
 
         img = Image.fromarray(img)
 
         if self.transform is not None:
-            img = self.transform)img
+            img = self.transform(img)
 
         if self.target_transform is not None:
             target = target.transform(target)
