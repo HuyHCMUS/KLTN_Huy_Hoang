@@ -59,7 +59,7 @@ class MISLABELCIFAR10(torchvision.datasets.CIFAR10):
         self.targets = self. whole_targets
         self.real_targets = self.whole_real_targets
 
-    def ajust_base_indx_temp(self, idx): #Thay đổi data và target mới (Lựa chọn tập con) dựa trên idx, Vẫn có thể khôi phục dữ liệu
+    def adjust_base_indx_temp(self, idx): #Thay đổi data và target mới (Lựa chọn tập con) dựa trên idx, Vẫn có thể khôi phục dữ liệu
 
         # Cần lấy ra new_data, new_targets và new_real_targets theo idx
         new_data = self.whole_data[idx,...]
@@ -73,7 +73,7 @@ class MISLABELCIFAR10(torchvision.datasets.CIFAR10):
         self.targets = new_targets
         self.real_targets = new_real_targets
         
-    def ajust_base_indx_perma(self, idx):#Thay đổi data và target mới (Lựa chọn tập con) dựa trên idx, không khôi phục được dữ liệu
+    def adjust_base_indx_perma(self, idx):#Thay đổi data và target mới (Lựa chọn tập con) dựa trên idx, không khôi phục được dữ liệu
 
         # Cần lấy ra new_data, new_targets và new_real_targets theo idx
         new_data = self.whole_data[idx,...]
