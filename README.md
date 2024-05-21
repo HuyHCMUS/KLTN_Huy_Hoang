@@ -11,3 +11,4 @@
 Slide: [Link](https://studenthcmusedu-my.sharepoint.com/:p:/g/personal/20120494_student_hcmus_edu_vn/EROx55rRxqlEhFhoeubtmHcB58GncqwHRzZ2Ds_t97dTcQ?e=FZaDPY)
 
 Đề cương: [Link](https://www.overleaf.com/read/mywgmnxhvmjx#6003c8)
+Cuốn: [Link](https://www.overleaf.com/read/qvcnwfpczzsf#b9a03f)
