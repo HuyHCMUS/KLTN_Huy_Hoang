@@ -13,3 +13,5 @@ Slide: [Link](https://studenthcmusedu-my.sharepoint.com/:p:/g/personal/20120494_
 Đề cương: [Link](https://www.overleaf.com/read/mywgmnxhvmjx#6003c8)
 
 Cuốn: [Link](https://www.overleaf.com/read/qvcnwfpczzsf#b9a03f)
+
+Thí nghiệm: [Link](https://docs.google.com/spreadsheets/d/1P4eEu4l-NYbml7rT8k5n3HuYR58foO-v9iT1qljVBb0/edit?usp=sharing)
