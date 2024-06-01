@@ -64,14 +64,21 @@ parser.add_argument('--root-log', type=str, default='log')
 parser.add_argument('--root-model', type=str, default='checkpoint')
 parser.add_argument('--use_crust', action='store_true',
                     help="Whether to use clusters in dataset.")
+
+parser.add_argument('--use_preds', action='store_true',
+                    help="Whether to use predict label.")
+
 parser.add_argument('--r',default=2.0, type=float,
                     help='Distance threshsold (i.e. radius) in caculating clusters.')
 parser.add_argument('--fl-ratio', type=float,default=0.5,####???
                     help='Ratio for number of facilities.')
 parser.add_argument('--mislabel-type',type=str,default='agnostic')
 parser.add_argument('--mislabel-ratio',type=float,default=0.5)
+parser.add_argument('--crust-start',type=int,default=5)
+
 parser.add_argument('--rand-number',type=int, default=0,
                     help='Ratio for number of facilities.') ###?????
+
 
 best_acc1 = 0
 
@@ -197,14 +204,15 @@ def main_worker(gpu, ngpus_per_node, args):
     weights = torch.FloatTensor(weights)#??
 
     for epoch in range(args.start_epoch, args.epochs):
-        if args.use_crust and epoch > 5:
-            train_dataset.switch_data()
+        train_dataset.switch_data()
+        grads_all, labels = estimate_grads(trainval_loader, model, criterion, args, epoch, log_training)#!!!
+        unique_preds = np.unique(labels)
+        if args.use_crust and epoch > args.crust_start:
             #FL_part
-            grads_all, labels = estimate_grads(trainval_loader, model, criterion, args, epoch, log_training)#!!!
             #per class clustering
             ssets = []
             weights = []
-            for c in range(args.num_classes):
+            for c in unique_preds:
                 sample_ids = np.where((labels == c) == True)[0] #!!!
                 grads = grads_all[sample_ids]
 
@@ -214,18 +222,22 @@ def main_worker(gpu, ngpus_per_node, args):
                 F = FacilityLocationCIFAR(V, D = dists)
                 B = int(args.fl_ratio * len(grads))
                 sset, vals = lazy_greedy_heap(F,V,B)
-                weights.extend(weight[sset].tolist())
-                sset = sample_ids[np.array(sset)]
-                ssets += list(sset)
+                if len(list(sset))>0:
+                    weights.extend(weight[sset].tolist())
+                    sset = sample_ids[np.array(sset)]
+                    ssets += list(sset)
             weights = torch.FloatTensor(weights)
             train_dataset.adjust_base_indx_temp(ssets)
             label_acc = train_dataset.estimate_label_acc()
+            print("Number label of each class in coreset:")
+            train_dataset.print_class_dis()
             tf_writer.add_scalar('label acc ',label_acc, epoch)
             log_training.write('epoch %d label acc: %f\n'%(epoch, label_acc))
+            print('epoch %d label acc: %f\n'%(epoch, label_acc))
             print('change train loader')
 
         #train for one epoch
-        if args.use_crust and epoch > 5:#???
+        if args.use_crust and epoch > args.crust_start:#???
             train(train_loader,model, criterion,weights,optimizer,epoch,args,log_training,tf_writer,fetch = True)#!!!
         else:
             train(train_loader,model, criterion,weights,optimizer,epoch,args,log_training,tf_writer,fetch=False)
@@ -359,39 +371,66 @@ def validate(val_loader, model, criterion, epoch, args, log_training=None, tf_wr
             tf_writer.add_scalar('acc/test_top1', top1.avg, epoch)
             tf_writer.add_scalar('acc/test_top5', top5.avg, epoch)
             log_training.write('epoch %d val acc: %f\n'%(epoch, top1.avg))
+            print('epoch %d val acc: %f\n'%(epoch, top1.avg))
 
     return top1.avg
 
 def estimate_grads(trainval_loader, model, criterion, args, epoch, log_training):
-    #switch model to train mode
+    # switch to train mode
     model.train()
     all_grads = []
     all_targets = []
-    all_preds = [] # Hình như không dùng đến
-    top1 = AverageMeter('Acc@1',':6.2f')
+    all_preds = []
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top1_on_noisy = AverageMeter('Acc@1', ':6.2f')
 
-    for _, (input, target, target_real, idx) in enumerate(trainval_loader): #???
+    for i, (input, target, target_real, idx) in enumerate(trainval_loader):
         if args.gpu is not None:
-            input = input.cuda(args.gpu, non_blocking = True)
+            input = input.cuda(args.gpu, non_blocking=True)
         all_targets.append(target)
-        target = target.cuda(args.gpu, non_blocking = True)
-        target_real = target_real.cuda(args.gpu, non_blocking = True)
-        #compute output
-        output, feats = model(input)#!!!
-        _,pred = torch.max(output,1)
-        loss = criterion(output,target).mean()
-        acc1, acc5 = accuracy(output,target_real,topk=(1,5))
-        top1.update(acc1[0],input.size(0))#!!!
-        est_grad = grad(loss,output)
+        target = target.cuda(args.gpu, non_blocking=True)
+        target_real = target_real.cuda(args.gpu, non_blocking=True)
+        # compute output
+        output, feat = model(input)
+        _, pred = torch.max(output, 1)
+        loss = criterion(output, target).mean()
+        acc1, acc5 = accuracy(output, target_real, topk=(1, 5))
+        acc1_on_noisy, acc5_on_noisy = accuracy(output, target, topk=(1, 5))
+        top1.update(acc1[0], input.size(0))
+        top1_on_noisy.update(acc1_on_noisy[0], input.size(0))
+        est_grad = grad(loss, feat)
         all_grads.append(est_grad[0].detach().cpu().numpy())
-        all_preds.append(pred.detach().cpu().numpy())#
-    
+        all_preds.append(pred.detach().cpu().numpy())
     all_grads = np.vstack(all_grads)
     all_targets = np.hstack(all_targets)
-    all_preds = np.hstack(all_preds)#
+    all_preds = np.hstack(all_preds)
+
+
+    # In kiểu dữ liệu, kích thước và giá trị của all_targets
+    print("all_targets:")
+    print(f"Type: {type(all_targets)}")
+    print(f"Shape: {all_targets.shape}")
+    print(f"Values: {all_targets}")
+
+    # In kiểu dữ liệu, kích thước và giá trị của all_preds
+    print("all_preds:")
+    print(f"Type: {type(all_preds)}")
+    print(f"Shape: {all_preds.shape}")
+    print(f"Values: {all_preds}")
+
+    # In ra số phần tử khác nhau trong all_preds
+    unique_preds = np.unique(all_preds)
+    print(f"Number of unique elements in all_preds: {len(unique_preds)}")
+    print(f"Unique elements in all_preds: {unique_preds}")
+
+
 
     log_training.write('epoch %d train acc: %f\n'%(epoch, top1.avg))
+    log_training.write('epoch %d train acc on noisy: %f\n'%(epoch, top1_on_noisy.avg))
+    print('epoch %d train acc: %f\n'%(epoch, top1.avg))
+    print('epoch %d train acc on noisy: %f\n'%(epoch, top1_on_noisy.avg))
+    if args.use_preds:
+        return all_grads, all_preds
     return all_grads, all_targets
-
 if __name__ == '__main__':
     main()
