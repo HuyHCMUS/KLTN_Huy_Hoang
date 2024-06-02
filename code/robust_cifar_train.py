@@ -65,8 +65,9 @@ parser.add_argument('--root-model', type=str, default='checkpoint')
 parser.add_argument('--use_crust', action='store_true',
                     help="Whether to use clusters in dataset.")
 
-parser.add_argument('--use_preds', action='store_true',
-                    help="Whether to use predict label.")
+parser.add_argument('--label-type', type=str, default='noisy',
+                    help='noisy/pred/correct')
+
 
 parser.add_argument('--r',default=2.0, type=float,
                     help='Distance threshsold (i.e. radius) in caculating clusters.')
@@ -229,8 +230,8 @@ def main_worker(gpu, ngpus_per_node, args):
             weights = torch.FloatTensor(weights)
             train_dataset.adjust_base_indx_temp(ssets)
             label_acc = train_dataset.estimate_label_acc()
-            print("Number label of each class in coreset:")
             train_dataset.print_class_dis()
+            train_dataset.print_real_class_dis()
             tf_writer.add_scalar('label acc ',label_acc, epoch)
             log_training.write('epoch %d label acc: %f\n'%(epoch, label_acc))
             print('epoch %d label acc: %f\n'%(epoch, label_acc))
@@ -381,6 +382,7 @@ def estimate_grads(trainval_loader, model, criterion, args, epoch, log_training)
     all_grads = []
     all_targets = []
     all_preds = []
+    all_targets_real = []
     top1 = AverageMeter('Acc@1', ':6.2f')
     top1_on_noisy = AverageMeter('Acc@1', ':6.2f')
 
@@ -388,11 +390,18 @@ def estimate_grads(trainval_loader, model, criterion, args, epoch, log_training)
         if args.gpu is not None:
             input = input.cuda(args.gpu, non_blocking=True)
         all_targets.append(target)
+        all_targets_real.append(target_real)
         target = target.cuda(args.gpu, non_blocking=True)
         target_real = target_real.cuda(args.gpu, non_blocking=True)
         # compute output
         output, feat = model(input)
         _, pred = torch.max(output, 1)
+        # if args.label_type == "pred":
+        #     loss = criterion(output, pred).mean()
+        # elif args.label_type == "noisy":
+        #     loss = criterion(output, target).mean()
+        # else:
+        #     loss = criterion(output, target_real).mean()
         loss = criterion(output, target).mean()
         acc1, acc5 = accuracy(output, target_real, topk=(1, 5))
         acc1_on_noisy, acc5_on_noisy = accuracy(output, target, topk=(1, 5))
@@ -403,34 +412,25 @@ def estimate_grads(trainval_loader, model, criterion, args, epoch, log_training)
         all_preds.append(pred.detach().cpu().numpy())
     all_grads = np.vstack(all_grads)
     all_targets = np.hstack(all_targets)
+    all_targets_real = np.hstack(all_targets_real)
+
     all_preds = np.hstack(all_preds)
 
-
-    # In kiểu dữ liệu, kích thước và giá trị của all_targets
-    print("all_targets:")
-    print(f"Type: {type(all_targets)}")
-    print(f"Shape: {all_targets.shape}")
-    print(f"Values: {all_targets}")
-
-    # In kiểu dữ liệu, kích thước và giá trị của all_preds
-    print("all_preds:")
-    print(f"Type: {type(all_preds)}")
-    print(f"Shape: {all_preds.shape}")
-    print(f"Values: {all_preds}")
-
     # In ra số phần tử khác nhau trong all_preds
-    unique_preds = np.unique(all_preds)
-    print(f"Number of unique elements in all_preds: {len(unique_preds)}")
-    print(f"Unique elements in all_preds: {unique_preds}")
-
-
+    unique_preds, counts = np.unique(all_preds, return_counts=True)
+    count_dict = dict(zip(unique_preds, counts))
+    print("Number label of each class in predict:")
+    print(count_dict)
 
     log_training.write('epoch %d train acc: %f\n'%(epoch, top1.avg))
     log_training.write('epoch %d train acc on noisy: %f\n'%(epoch, top1_on_noisy.avg))
     print('epoch %d train acc: %f\n'%(epoch, top1.avg))
     print('epoch %d train acc on noisy: %f\n'%(epoch, top1_on_noisy.avg))
-    if args.use_preds:
+    if args.label_type == "pred":    
         return all_grads, all_preds
-    return all_grads, all_targets
+    elif args.label_type == "noisy":
+        return all_grads, all_targets
+    else:
+        return all_grads, all_targets_real
 if __name__ == '__main__':
     main()
